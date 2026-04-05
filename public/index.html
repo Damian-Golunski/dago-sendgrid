@@ -50,6 +50,23 @@
   small { color:var(--muted); }
   .sched-row { display:grid; grid-template-columns: 1fr 120px 120px; gap:10px; padding:8px 10px; border-bottom:1px solid #222b52; font-size:12px; align-items:center; }
   .sched-row.head { color:var(--muted); text-transform:uppercase; font-size:10px; letter-spacing:.8px; }
+  .stats-grid { display:grid; grid-template-columns: repeat(5, 1fr); gap:8px; margin:10px 0; }
+  .stat-tile { background:#0d1330; border:1px solid #222b52; border-radius:8px; padding:10px; text-align:center; }
+  .stat-tile .v { font-size:20px; font-weight:700; color:var(--fg); }
+  .stat-tile .l { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; }
+  .ss-item { background:#0d1330; border:1px solid #222b52; border-radius:8px; padding:12px; margin-bottom:8px; cursor:pointer; transition:.15s; }
+  .ss-item:hover { border-color:var(--accent); }
+  .ss-item .name { font-weight:600; font-size:13px; }
+  .ss-item .meta { font-size:11px; color:var(--muted); margin-top:3px; }
+  .cal-day .ss { position:absolute; bottom:4px; right:6px; font-size:10px; color:#5b8cff; font-weight:700; }
+  .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:100; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .modal { background:var(--card); border-radius:12px; max-width:900px; width:100%; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; }
+  .modal-head { padding:14px 18px; border-bottom:1px solid #222b52; display:flex; justify-content:space-between; align-items:center; }
+  .modal-head h3 { margin:0; font-size:14px; }
+  .modal-body { flex:1; overflow:auto; padding:0; }
+  .modal-body iframe { width:100%; min-height:500px; border:0; background:white; }
+  .close-x { background:transparent; color:var(--muted); font-size:22px; padding:0 8px; margin:0; }
+  .empty-day { background:#3a1320; border:1px solid #5a2030; border-radius:8px; padding:14px; color:#ff6b81; font-weight:600; }
 </style>
 </head>
 <body>
@@ -130,6 +147,7 @@ let calCursor = new Date();
 calCursor.setDate(1);
 let calData = {};         // 'YYYY-MM-DD' -> [messages]
 let calScheduled = {};    // 'YYYY-MM-DD' -> [scheduled items]
+let calSingleSends = {};  // 'YYYY-MM-DD' -> [single send campaigns]
 let calSelected = null;
 
 function monthLabel(d) {
@@ -148,9 +166,10 @@ async function loadCalendar() {
   const diffDays = Math.ceil((now - calCursor) / 86400000) + 45;
   const days = Math.max(7, Math.min(diffDays, 400));
 
-  const [msgRes, schedRes] = await Promise.all([
+  const [msgRes, schedRes, ssRes] = await Promise.all([
     api('/api/messages?days=' + days + '&limit=1000'),
     api('/api/scheduled'),
+    api('/api/singlesends'),
   ]);
 
   calData = {};
@@ -176,7 +195,43 @@ async function loadCalendar() {
     }
   }
 
+  calSingleSends = {};
+  if (ssRes.ok) {
+    const items = (ssRes.data.result || ssRes.data.singlesends || []);
+    for (const ss of items) {
+      const t = ss.send_at || ss.updated_at || ss.created_at;
+      if (!t) continue;
+      const day = new Date(t).toISOString().slice(0, 10);
+      (calSingleSends[day] = calSingleSends[day] || []).push(ss);
+    }
+  }
+
   renderCalendar();
+}
+
+function dayStats(day) {
+  const list = calData[day] || [];
+  const s = { count: list.length, delivered: 0, opens: 0, clicks: 0, bounces: 0, dropped: 0, spam: 0 };
+  for (const m of list) {
+    const st = (m.status || '').toLowerCase();
+    if (st === 'delivered') s.delivered++;
+    if (st === 'bounce' || st === 'blocked') s.bounces++;
+    if (st === 'dropped') s.dropped++;
+    if (st === 'spam_report' || st === 'spam') s.spam++;
+    s.opens += (m.opens_count || 0);
+    s.clicks += (m.clicks_count || 0);
+  }
+  return s;
+}
+
+function isPastDay(day) {
+  const today = new Date().toISOString().slice(0, 10);
+  return day < today;
+}
+
+function isWeekend(day) {
+  const d = new Date(day + 'T00:00:00');
+  return d.getDay() === 0 || d.getDay() === 6;
 }
 
 function renderCalendar() {
@@ -200,6 +255,7 @@ function renderCalendar() {
     const key = `${year}-${String(month+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
     const count = (calData[key] || []).length;
     const schedCount = (calScheduled[key] || []).length;
+    const ssCount = (calSingleSends[key] || []).length;
     const hols = holidaysOn(key);
     const cls = ['cal-day'];
     if (count) cls.push('has');
@@ -207,10 +263,11 @@ function renderCalendar() {
     if (calSelected === key) cls.push('sel');
     if (hols.length) cls.push('holiday');
     const schedBadge = schedCount ? `<div class="sc">⏰ ${schedCount}</div>` : '';
+    const ssBadge = ssCount ? `<div class="ss">📬 ${ssCount}</div>` : '';
     const holBadge = hols.length
       ? `<div class="hol">${hols.map(h => `<span title="${esc(h.cc)}: ${esc(h.name)}">${COUNTRY_FLAGS[h.cc] || h.cc}</span>`).join('')}</div>`
       : '';
-    cells += `<div class="${cls.join(' ')}" onclick="selectDay('${key}')">${schedBadge}<div class="d">${dayNum}</div>${holBadge}<div class="c">${count || ''}</div></div>`;
+    cells += `<div class="${cls.join(' ')}" onclick="selectDay('${key}')">${schedBadge}${ssBadge}<div class="d">${dayNum}</div>${holBadge}<div class="c">${count || ''}</div></div>`;
   }
   $('calendar').innerHTML = `<div class="cal-grid">${heads}${cells}</div>`;
   if (calSelected) renderDayList(calSelected);
@@ -226,7 +283,9 @@ function esc(s) { return String(s || '').replace(/[<>&]/g, c => ({'<':'&lt;','>'
 function renderDayList(day) {
   const sent = calData[day] || [];
   const sched = calScheduled[day] || [];
+  const ss = calSingleSends[day] || [];
   const hols = holidaysOn(day);
+  const stats = dayStats(day);
 
   let html = `<h3 style="font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">${day}</h3>`;
 
@@ -237,13 +296,37 @@ function renderDayList(day) {
     html += `</ul></div>`;
   }
 
-  if (!sent.length && !sched.length && !hols.length) {
-    $('dayList').innerHTML = `<p><small>Brak wiadomości ani świąt w dniu ${day}</small></p>`;
-    return;
+  // "Przespana okazja" warning: past workday with zero sends
+  if (isPastDay(day) && !isWeekend(day) && !hols.length && sent.length === 0 && ss.length === 0) {
+    html += `<div class="empty-day">⚠️ Dzień roboczy bez żadnej wysyłki — przespana okazja marketingowa</div>`;
   }
 
+  // Aggregate stats tiles
   if (sent.length) {
-    html += `<h4 style="margin:10px 0 4px; font-size:12px;">Wysłane (${sent.length})</h4>`;
+    html += `<div class="stats-grid">
+      <div class="stat-tile"><div class="v">${stats.count}</div><div class="l">Wysłane</div></div>
+      <div class="stat-tile"><div class="v ok">${stats.delivered}</div><div class="l">Delivered</div></div>
+      <div class="stat-tile"><div class="v">${stats.opens}</div><div class="l">Opens</div></div>
+      <div class="stat-tile"><div class="v">${stats.clicks}</div><div class="l">Clicks</div></div>
+      <div class="stat-tile"><div class="v err">${stats.bounces + stats.dropped + stats.spam}</div><div class="l">Problemy</div></div>
+    </div>`;
+  }
+
+  // Single Sends (marketing campaigns) — clickable for preview
+  if (ss.length) {
+    html += `<h4 style="margin:14px 0 6px; font-size:12px;">📬 Single Send Campaigns (${ss.length}) — kliknij aby zobaczyć podgląd</h4>`;
+    html += ss.map(s => {
+      const t = (s.send_at || s.updated_at) ? new Date(s.send_at || s.updated_at).toLocaleTimeString('pl-PL') : '';
+      return `<div class="ss-item" onclick="previewSingleSend('${esc(s.id)}')">
+        <div class="name">${esc(s.name || '(bez nazwy)')}</div>
+        <div class="meta">${t} · status: ${statusBadge(s.status)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Individual messages
+  if (sent.length) {
+    html += `<h4 style="margin:14px 0 4px; font-size:12px;">Pojedyncze wiadomości (${sent.length})</h4>`;
     html += `<div class="msg-row head"><div>Godzina</div><div>Od → Do</div><div>Temat</div><div>Status</div></div>`;
     html += sent.map(m => {
       const t = m.last_event_time ? new Date(m.last_event_time).toLocaleTimeString('pl-PL') : '';
@@ -257,7 +340,7 @@ function renderDayList(day) {
   }
 
   if (sched.length) {
-    html += `<h4 style="margin:14px 0 4px; font-size:12px;">Zaplanowane (${sched.length})</h4>`;
+    html += `<h4 style="margin:14px 0 4px; font-size:12px;">⏰ Zaplanowane (${sched.length})</h4>`;
     html += `<div class="msg-row head"><div>Godzina</div><div colspan="2">Batch ID</div><div>Status</div></div>`;
     html += sched.map(s => {
       const t = s.send_at ? new Date(s.send_at * 1000).toLocaleTimeString('pl-PL') : '';
@@ -270,6 +353,47 @@ function renderDayList(day) {
   }
 
   $('dayList').innerHTML = html;
+}
+
+async function previewSingleSend(id) {
+  const modal = document.createElement('div');
+  modal.className = 'modal-bg';
+  modal.innerHTML = `<div class="modal">
+    <div class="modal-head"><h3>Loading...</h3><button class="close-x" onclick="this.closest('.modal-bg').remove()">×</button></div>
+    <div class="modal-body"><p style="padding:20px;">Wczytywanie podglądu...</p></div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+  const { ok, data } = await api('/api/singlesend/' + encodeURIComponent(id));
+  if (!ok) {
+    modal.querySelector('.modal-body').innerHTML = `<p class="err" style="padding:20px;">${data.error || 'error'}</p>`;
+    return;
+  }
+  const d = data.detail || {};
+  const cfg = d.email_config || {};
+  const html = cfg.html_content || cfg.plain_content || '<p>(brak treści)</p>';
+  const subj = cfg.subject || d.name || 'Single Send';
+  const st = data.stats && data.stats.results && data.stats.results[0] && data.stats.results[0].stats && data.stats.results[0].stats[0] && data.stats.results[0].stats[0].metrics;
+
+  let statsHtml = '';
+  if (st) {
+    statsHtml = `<div class="stats-grid" style="padding:10px 18px 0;">
+      <div class="stat-tile"><div class="v">${st.requests || 0}</div><div class="l">Requests</div></div>
+      <div class="stat-tile"><div class="v ok">${st.delivered || 0}</div><div class="l">Delivered</div></div>
+      <div class="stat-tile"><div class="v">${st.unique_opens || 0}</div><div class="l">Unique opens</div></div>
+      <div class="stat-tile"><div class="v">${st.unique_clicks || 0}</div><div class="l">Unique clicks</div></div>
+      <div class="stat-tile"><div class="v err">${(st.bounces || 0) + (st.spam_reports || 0)}</div><div class="l">Problemy</div></div>
+    </div>`;
+  }
+
+  modal.querySelector('.modal').innerHTML = `
+    <div class="modal-head">
+      <h3>${esc(d.name || subj)}<br><small style="font-weight:400;">${esc(subj)}</small></h3>
+      <button class="close-x" onclick="this.closest('.modal-bg').remove()">×</button>
+    </div>
+    ${statsHtml}
+    <div class="modal-body"><iframe sandbox="" srcdoc="${html.replace(/"/g, '&quot;')}"></iframe></div>`;
 }
 
 function selectDay(key) {

@@ -66,6 +66,24 @@ app.get('/api/message/:id', async (req, res) => {
   catch (e) { res.status(400).json({ error: e.message }); }
 });
 
+app.get('/api/singlesends', async (_req, res) => {
+  try {
+    const data = await sg('/marketing/singlesends?page_size=100');
+    res.json(data);
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.get('/api/singlesend/:id', async (req, res) => {
+  try {
+    const id = encodeURIComponent(req.params.id);
+    const [detail, stats] = await Promise.all([
+      sg(`/marketing/singlesends/${id}`),
+      sg(`/marketing/stats/singlesends/${id}`).catch(() => null),
+    ]);
+    res.json({ detail, stats });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
 app.get('/api/scheduled', async (_req, res) => {
   try { res.json(await sg('/user/scheduled_sends')); }
   catch (e) { res.status(400).json({ error: e.message }); }
