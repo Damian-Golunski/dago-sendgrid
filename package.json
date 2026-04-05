@@ -1,0 +1,17 @@
+{
+  "name": "sendgrid-ai-assistant",
+  "version": "1.0.0",
+  "description": "AI-powered assistant for SendGrid: draft, analyze, send emails and manage templates with Claude",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "express": "^4.21.2"
+  }
+}

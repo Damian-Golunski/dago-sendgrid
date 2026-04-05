@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SendGrid AI Assistant</title>
+<style>
+  :root { --bg:#0b1020; --card:#141a33; --fg:#e6ecff; --muted:#8a93b8; --accent:#5b8cff; --ok:#35c28a; --err:#ff6b81; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, Segoe UI, system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:20px 24px; border-bottom:1px solid #222b52; display:flex; justify-content:space-between; align-items:center; }
+  header h1 { margin:0; font-size:18px; letter-spacing:.3px; }
+  main { max-width:1100px; margin:0 auto; padding:24px; display:grid; grid-template-columns: 1fr 1fr; gap:20px; }
+  .card { background:var(--card); border:1px solid #222b52; border-radius:12px; padding:18px; }
+  .card h2 { margin:0 0 12px; font-size:14px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); }
+  label { display:block; font-size:12px; color:var(--muted); margin:8px 0 4px; }
+  input, textarea, select { width:100%; background:#0d1330; color:var(--fg); border:1px solid #283366; border-radius:8px; padding:10px; font:inherit; }
+  textarea { min-height:100px; resize:vertical; }
+  button { background:var(--accent); color:white; border:0; border-radius:8px; padding:10px 14px; font-weight:600; cursor:pointer; margin-top:10px; }
+  button.secondary { background:#283366; }
+  button:hover { opacity:.9; }
+  .row { display:flex; gap:8px; }
+  .row > * { flex:1; }
+  pre { white-space:pre-wrap; background:#0d1330; padding:10px; border-radius:8px; max-height:260px; overflow:auto; font-size:12px; }
+  .ok { color:var(--ok); } .err { color:var(--err); }
+  .full { grid-column: 1 / -1; }
+  small { color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>📧 SendGrid AI Assistant</h1>
+  <small id="status">not connected</small>
+</header>
+<main>
+  <section class="card full">
+    <h2>1. Keys (stored in your browser only)</h2>
+    <div class="row">
+      <div>
+        <label>SendGrid API Key</label>
+        <input id="sgKey" type="password" placeholder="SG.xxxxx" />
+      </div>
+      <div>
+        <label>Anthropic API Key (for AI features)</label>
+        <input id="anthKey" type="password" placeholder="sk-ant-xxxxx" />
+      </div>
+    </div>
+    <button onclick="saveKeys()">Save & Test</button>
+    <pre id="profile"></pre>
+  </section>
+
+  <section class="card">
+    <h2>📊 Stats (last 7 days)</h2>
+    <button onclick="loadStats()">Load stats</button>
+    <button class="secondary" onclick="analyzeStats()">AI analysis (30d)</button>
+    <pre id="stats"></pre>
+  </section>
+
+  <section class="card">
+    <h2>📄 Templates</h2>
+    <button onclick="loadTemplates()">Load templates</button>
+    <pre id="templates"></pre>
+  </section>
+
+  <section class="card full">
+    <h2>✍️ AI Draft Email</h2>
+    <label>What should the email say?</label>
+    <textarea id="instruction" placeholder="e.g. Draft a friendly re-engagement email in German for dormant courier customers, mention a 10% discount on their next transport."></textarea>
+    <label>Optional context</label>
+    <textarea id="context" placeholder="Brand voice, recipient info, links..."></textarea>
+    <button onclick="draft()">Generate draft</button>
+    <div id="draftOut"></div>
+  </section>
+
+  <section class="card full">
+    <h2>🚀 Send Email</h2>
+    <div class="row">
+      <div><label>From</label><input id="from" placeholder="noreply@yourdomain.com" /></div>
+      <div><label>To</label><input id="to" placeholder="recipient@example.com" /></div>
+    </div>
+    <label>Subject</label><input id="subject" />
+    <label>HTML body</label><textarea id="html"></textarea>
+    <button onclick="sendMail()">Send via SendGrid</button>
+    <pre id="sendOut"></pre>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const keys = () => ({
+  'x-sendgrid-key': localStorage.getItem('sgKey') || '',
+  'x-anthropic-key': localStorage.getItem('anthKey') || '',
+});
+
+function loadKeys() {
+  $('sgKey').value = localStorage.getItem('sgKey') || '';
+  $('anthKey').value = localStorage.getItem('anthKey') || '';
+}
+loadKeys();
+
+async function saveKeys() {
+  localStorage.setItem('sgKey', $('sgKey').value.trim());
+  localStorage.setItem('anthKey', $('anthKey').value.trim());
+  const r = await fetch('/api/profile', { headers: keys() });
+  const data = await r.json();
+  $('profile').textContent = JSON.stringify(data, null, 2);
+  $('status').textContent = r.ok ? '✅ connected as ' + (data.username || data.email || 'user') : '❌ error';
+  $('status').className = r.ok ? 'ok' : 'err';
+}
+
+async function loadStats() {
+  const r = await fetch('/api/stats?days=7', { headers: keys() });
+  $('stats').textContent = JSON.stringify(await r.json(), null, 2);
+}
+
+async function analyzeStats() {
+  $('stats').textContent = 'Analyzing...';
+  const r = await fetch('/api/ai/analyze', { method:'POST', headers: { 'Content-Type':'application/json', ...keys() }, body:'{}' });
+  const data = await r.json();
+  $('stats').textContent = data.analysis || data.error;
+}
+
+async function loadTemplates() {
+  const r = await fetch('/api/templates', { headers: keys() });
+  $('templates').textContent = JSON.stringify(await r.json(), null, 2);
+}
+
+async function draft() {
+  $('draftOut').innerHTML = 'Generating...';
+  const r = await fetch('/api/ai/draft', {
+    method:'POST',
+    headers: { 'Content-Type':'application/json', ...keys() },
+    body: JSON.stringify({ instruction: $('instruction').value, context: $('context').value }),
+  });
+  const d = await r.json();
+  if (d.error) { $('draftOut').innerHTML = '<p class="err">'+d.error+'</p>'; return; }
+  $('subject').value = d.subject || '';
+  $('html').value = d.html || d.text || '';
+  $('draftOut').innerHTML = '<p class="ok">Draft loaded into the Send Email form below ↓</p>';
+}
+
+async function sendMail() {
+  const body = {
+    from: $('from').value, to: $('to').value,
+    subject: $('subject').value, html: $('html').value,
+  };
+  const r = await fetch('/api/send', {
+    method:'POST',
+    headers: { 'Content-Type':'application/json', ...keys() },
+    body: JSON.stringify(body),
+  });
+  const d = await r.json();
+  $('sendOut').textContent = r.ok ? '✅ sent' : '❌ ' + (d.error || 'error');
+}
+</script>
+</body>
+</html>
