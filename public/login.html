@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DAGO Sendgrid — Login</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<style>
+  :root { --bg:#0b1020; --card:#141a33; --fg:#e6ecff; --muted:#8a93b8; --accent:#5b8cff; --err:#ff6b81; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; height:100%; }
+  body {
+    font-family: -apple-system, Segoe UI, system-ui, sans-serif;
+    background: radial-gradient(1200px 800px at 20% 10%, #1a2247 0%, #0b1020 60%) var(--bg);
+    color: var(--fg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid #222b52;
+    border-radius: 16px;
+    padding: 36px 40px;
+    width: 100%;
+    max-width: 380px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+  .logo-circle {
+    width: 48px; height: 48px;
+    background: #2D3436;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 24px;
+    color: white;
+    font-family: Arial, sans-serif;
+  }
+  .logo-text { line-height: 1.2; }
+  .logo-text strong { display: block; font-size: 16px; }
+  .logo-text span { font-size: 12px; color: var(--muted); }
+  h1 { margin: 0 0 6px; font-size: 20px; font-weight: 600; }
+  p.sub { margin: 0 0 24px; font-size: 13px; color: var(--muted); }
+  label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  input {
+    width: 100%;
+    background: #0d1330;
+    color: var(--fg);
+    border: 1px solid #283366;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font: inherit;
+    transition: border-color .15s;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  .field { margin-bottom: 16px; }
+  button {
+    width: 100%;
+    background: var(--accent);
+    color: white;
+    border: 0;
+    border-radius: 10px;
+    padding: 13px;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: .15s;
+  }
+  button:hover { background: #4a7aed; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .err {
+    background: #3a1320;
+    border: 1px solid #5a2030;
+    color: var(--err);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    margin-top: 14px;
+    display: none;
+  }
+  .err.show { display: block; }
+  .foot { text-align: center; font-size: 11px; color: var(--muted); margin-top: 22px; }
+</style>
+</head>
+<body>
+<form class="card" onsubmit="return login(event)">
+  <div class="logo">
+    <div class="logo-circle">G</div>
+    <div class="logo-text">
+      <strong>DAGO Sendgrid</strong>
+      <span>Email analytics dashboard</span>
+    </div>
+  </div>
+  <h1>Sign in</h1>
+  <p class="sub">Enter your credentials to access the dashboard.</p>
+  <div class="field">
+    <label for="u">Username</label>
+    <input id="u" name="username" type="text" autocomplete="username" autofocus required />
+  </div>
+  <div class="field">
+    <label for="p">Password</label>
+    <input id="p" name="password" type="password" autocomplete="current-password" required />
+  </div>
+  <button type="submit" id="btn">Sign in</button>
+  <div class="err" id="err"></div>
+  <div class="foot">DAGO Express GmbH · internal tool</div>
+</form>
+
+<script>
+async function login(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn');
+  const err = document.getElementById('err');
+  btn.disabled = true;
+  btn.textContent = 'Signing in...';
+  err.classList.remove('show');
+  try {
+    const r = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: document.getElementById('u').value,
+        password: document.getElementById('p').value,
+      }),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      location.href = '/';
+      return false;
+    }
+    err.textContent = data.error || 'Login failed';
+    err.classList.add('show');
+  } catch (ex) {
+    err.textContent = 'Network error';
+    err.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sign in';
+  }
+  return false;
+}
+// If already authenticated, go straight to dashboard
+fetch('/api/me').then(r => r.json()).then(d => { if (d.authenticated) location.href = '/'; });
+</script>
+</body>
+</html>

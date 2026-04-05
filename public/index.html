@@ -72,7 +72,10 @@
 <body>
 <header>
   <h1>📧 DAGO Sendgrid</h1>
-  <small id="status">not connected</small>
+  <div style="display:flex;gap:12px;align-items:center;">
+    <small id="status">not connected</small>
+    <button onclick="logout()" class="secondary" style="margin:0;padding:6px 12px;font-size:12px;">Logout</button>
+  </div>
 </header>
 <main>
   <section class="card full">
@@ -413,6 +416,11 @@ async function loadScheduled() {
     return `<div class="sched-row"><div><code>${esc(s.batch_id)}</code></div><div>${when}</div><div>${statusBadge(s.status)}</div></div>`;
   }).join('');
   $('scheduled').innerHTML = html;
+}
+
+async function logout() {
+  await fetch('/api/logout', { method: 'POST' });
+  location.href = '/login';
 }
 
 // init

@@ -1,27 +1,88 @@
 import express from 'express';
+import crypto from 'crypto';
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 
-// --- Basic auth protection ---
+// --- Session-based auth ---
 const AUTH_USER = process.env.AUTH_USER || '';
 const AUTH_PASS = process.env.AUTH_PASS || '';
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+const COOKIE_NAME = 'dago_sg_session';
+const SESSION_TTL_MS = 7 * 24 * 3600 * 1000; // 7 days
 
-app.use((req, res, next) => {
-  if (req.path === '/healthz') return next();
-  if (!AUTH_USER || !AUTH_PASS) return next(); // auth disabled if env vars missing
+function sign(payload) {
+  const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = crypto.createHmac('sha256', SESSION_SECRET).update(data).digest('base64url');
+  return `${data}.${sig}`;
+}
 
-  const header = req.headers.authorization || '';
-  const [scheme, encoded] = header.split(' ');
-  if (scheme === 'Basic' && encoded) {
-    try {
-      const [user, pass] = Buffer.from(encoded, 'base64').toString('utf8').split(':');
-      if (user === AUTH_USER && pass === AUTH_PASS) return next();
-    } catch {}
+function verify(token) {
+  if (!token) return null;
+  const [data, sig] = token.split('.');
+  if (!data || !sig) return null;
+  const expected = crypto.createHmac('sha256', SESSION_SECRET).update(data).digest('base64url');
+  if (sig !== expected) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
+  } catch { return null; }
+}
+
+function parseCookies(req) {
+  const header = req.headers.cookie || '';
+  const out = {};
+  for (const part of header.split(';')) {
+    const [k, ...rest] = part.trim().split('=');
+    if (k) out[k] = decodeURIComponent(rest.join('='));
   }
-  res.set('WWW-Authenticate', 'Basic realm="DAGO Sendgrid"');
-  res.status(401).send('Authentication required');
+  return out;
+}
+
+function isAuthenticated(req) {
+  if (!AUTH_USER || !AUTH_PASS) return true; // auth disabled when env missing
+  const token = parseCookies(req)[COOKIE_NAME];
+  return !!verify(token);
+}
+
+// Login endpoint
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body || {};
+  if (!AUTH_USER || !AUTH_PASS) return res.json({ ok: true });
+  if (username === AUTH_USER && password === AUTH_PASS) {
+    const token = sign({ u: username, exp: Date.now() + SESSION_TTL_MS });
+    res.setHeader('Set-Cookie',
+      `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; Path=/; Max-Age=${SESSION_TTL_MS/1000}; SameSite=Lax; Secure`);
+    return res.json({ ok: true });
+  }
+  res.status(401).json({ error: 'Invalid credentials' });
 });
+
+app.post('/api/logout', (req, res) => {
+  res.setHeader('Set-Cookie', `${COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax; Secure`);
+  res.json({ ok: true });
+});
+
+app.get('/api/me', (req, res) => {
+  res.json({ authenticated: isAuthenticated(req) });
+});
+
+// Auth gate — protects everything except login page, login endpoint, static assets needed before login
+app.use((req, res, next) => {
+  const open = [
+    '/healthz', '/login', '/login.html', '/api/login', '/api/me',
+    '/favicon.svg', '/favicon.ico',
+  ];
+  if (open.includes(req.path)) return next();
+  if (isAuthenticated(req)) return next();
+  // HTML requests → redirect to login page; API → 401
+  if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'not authenticated' });
+  res.redirect('/login');
+});
+
+// Explicit /login route serves login.html
+app.get('/login', (_req, res) => res.sendFile('login.html', { root: 'public' }));
 
 app.use(express.static('public'));
 
