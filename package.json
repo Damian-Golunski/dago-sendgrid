@@ -1,5 +1,5 @@
 {
-  "name": "sendgrid-ai-assistant",
+  "name": "dago-sendgrid",
   "version": "1.0.0",
   "description": "AI-powered assistant for SendGrid: draft, analyze, send emails and manage templates with Claude",
   "main": "server.js",
