@@ -2,6 +2,27 @@ import express from 'express';
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
+
+// --- Basic auth protection ---
+const AUTH_USER = process.env.AUTH_USER || '';
+const AUTH_PASS = process.env.AUTH_PASS || '';
+
+app.use((req, res, next) => {
+  if (req.path === '/healthz') return next();
+  if (!AUTH_USER || !AUTH_PASS) return next(); // auth disabled if env vars missing
+
+  const header = req.headers.authorization || '';
+  const [scheme, encoded] = header.split(' ');
+  if (scheme === 'Basic' && encoded) {
+    try {
+      const [user, pass] = Buffer.from(encoded, 'base64').toString('utf8').split(':');
+      if (user === AUTH_USER && pass === AUTH_PASS) return next();
+    } catch {}
+  }
+  res.set('WWW-Authenticate', 'Basic realm="DAGO Sendgrid"');
+  res.status(401).send('Authentication required');
+});
+
 app.use(express.static('public'));
 
 const SENDGRID_API = 'https://api.sendgrid.com/v3';
