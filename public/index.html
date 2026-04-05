@@ -10,21 +10,45 @@
   body { margin:0; font-family: -apple-system, Segoe UI, system-ui, sans-serif; background:var(--bg); color:var(--fg); }
   header { padding:20px 24px; border-bottom:1px solid #222b52; display:flex; justify-content:space-between; align-items:center; }
   header h1 { margin:0; font-size:18px; letter-spacing:.3px; }
-  main { max-width:1100px; margin:0 auto; padding:24px; display:grid; grid-template-columns: 1fr 1fr; gap:20px; }
+  main { max-width:1180px; margin:0 auto; padding:24px; display:grid; grid-template-columns: 1fr 1fr; gap:20px; }
   .card { background:var(--card); border:1px solid #222b52; border-radius:12px; padding:18px; }
   .card h2 { margin:0 0 12px; font-size:14px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); }
-  label { display:block; font-size:12px; color:var(--muted); margin:8px 0 4px; }
-  input, textarea, select { width:100%; background:#0d1330; color:var(--fg); border:1px solid #283366; border-radius:8px; padding:10px; font:inherit; }
-  textarea { min-height:100px; resize:vertical; }
-  button { background:var(--accent); color:white; border:0; border-radius:8px; padding:10px 14px; font-weight:600; cursor:pointer; margin-top:10px; }
+  button { background:var(--accent); color:white; border:0; border-radius:8px; padding:10px 14px; font-weight:600; cursor:pointer; margin-top:6px; }
   button.secondary { background:#283366; }
   button:hover { opacity:.9; }
-  .row { display:flex; gap:8px; }
-  .row > * { flex:1; }
+  .row { display:flex; gap:8px; align-items:center; }
   pre { white-space:pre-wrap; background:#0d1330; padding:10px; border-radius:8px; max-height:260px; overflow:auto; font-size:12px; }
+  .cal-grid { display:grid; grid-template-columns: repeat(7, 1fr); gap:6px; }
+  .cal-head { text-align:center; font-size:11px; color:var(--muted); text-transform:uppercase; padding:4px 0; }
+  .cal-day { background:#0d1330; border:1px solid #222b52; border-radius:8px; min-height:78px; padding:6px; cursor:pointer; display:flex; flex-direction:column; justify-content:space-between; transition:.15s; position:relative; }
+  .cal-day:hover { border-color: var(--accent); }
+  .cal-day.empty { background:transparent; border:1px dashed #1a2246; cursor:default; }
+  .cal-day.empty:hover { border-color:#1a2246; }
+  .cal-day .d { font-size:12px; color:var(--muted); }
+  .cal-day .c { font-size:20px; font-weight:700; }
+  .cal-day .sc { position:absolute; top:4px; right:6px; font-size:10px; color:#ffb86b; font-weight:700; }
+  .cal-day .hol { display:flex; flex-wrap:wrap; gap:2px; font-size:11px; line-height:1; margin-top:2px; }
+  .cal-day .hol span { filter:drop-shadow(0 0 2px rgba(0,0,0,.6)); cursor:help; }
+  .cal-day.holiday { background: linear-gradient(180deg, #3a2a13, #1a1430); border-color:#5a4020; }
+  .cal-day.holiday.has { background: linear-gradient(180deg, #3a2a13 0%, #15204a 60%, #0d1330 100%); }
+  .cal-day.has { background: linear-gradient(180deg, #15204a, #0d1330); }
+  .cal-day.today { border-color: var(--accent); }
+  .cal-day.sel { outline: 2px solid var(--accent); }
+  .msg-row { display:grid; grid-template-columns: 110px 1fr 1.3fr 90px; gap:10px; padding:8px 10px; border-bottom:1px solid #222b52; font-size:12px; }
+  .msg-row.head { color:var(--muted); text-transform:uppercase; font-size:10px; letter-spacing:.8px; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; text-transform:uppercase; }
+  .b-delivered, .b-delivered { background:#123a2a; color:#35c28a; }
+  .b-bounce, .b-dropped, .b-blocked { background:#3a1320; color:#ff6b81; }
+  .b-open, .b-click, .b-processed { background:#13263a; color:#5b8cff; }
+  .b-deferred, .b-not_delivered { background:#2a2a3a; color:#b0b8d8; }
+  .b-spam_report, .b-spam { background:#3a2a13; color:#ffb86b; }
+  .b-pending, .b-paused { background:#3a2a13; color:#ffb86b; }
+  .b-cancel { background:#2a2a3a; color:#b0b8d8; }
   .ok { color:var(--ok); } .err { color:var(--err); }
   .full { grid-column: 1 / -1; }
   small { color:var(--muted); }
+  .sched-row { display:grid; grid-template-columns: 1fr 120px 120px; gap:10px; padding:8px 10px; border-bottom:1px solid #222b52; font-size:12px; align-items:center; }
+  .sched-row.head { color:var(--muted); text-transform:uppercase; font-size:10px; letter-spacing:.8px; }
 </style>
 </head>
 <body>
@@ -34,25 +58,35 @@
 </header>
 <main>
   <section class="card full">
-    <h2>1. Keys (stored in your browser only)</h2>
-    <div class="row">
-      <div>
-        <label>SendGrid API Key</label>
-        <input id="sgKey" type="password" placeholder="SG.xxxxx" />
-      </div>
-      <div>
-        <label>Anthropic API Key (for AI features)</label>
-        <input id="anthKey" type="password" placeholder="sk-ant-xxxxx" />
-      </div>
-    </div>
-    <button onclick="saveKeys()">Save & Test</button>
+    <h2>Connection</h2>
+    <button onclick="testConnection()">Test connection</button>
     <pre id="profile"></pre>
+  </section>
+
+  <section class="card full">
+    <h2>📅 Email Calendar — sent & scheduled</h2>
+    <div class="row" style="justify-content:space-between;">
+      <div class="row">
+        <button class="secondary" onclick="calShift(-1)">◀</button>
+        <button class="secondary" onclick="calShift(1)">▶</button>
+        <strong id="calLabel" style="margin-left:10px;"></strong>
+      </div>
+      <button onclick="loadCalendar()">Reload</button>
+    </div>
+    <small>Past messages come from SendGrid Email Activity Feed API (paid add-on). Scheduled count per day comes from <code>/v3/user/scheduled_sends</code>. Click a day to see details.</small>
+    <div id="calendar" style="margin-top:14px;"></div>
+    <div id="dayList" style="margin-top:14px;"></div>
+  </section>
+
+  <section class="card full">
+    <h2>⏰ Scheduled sends</h2>
+    <button onclick="loadScheduled()">Load scheduled</button>
+    <div id="scheduled" style="margin-top:10px;"></div>
   </section>
 
   <section class="card">
     <h2>📊 Stats (last 7 days)</h2>
     <button onclick="loadStats()">Load stats</button>
-    <button class="secondary" onclick="analyzeStats()">AI analysis (30d)</button>
     <pre id="stats"></pre>
   </section>
 
@@ -61,97 +95,205 @@
     <button onclick="loadTemplates()">Load templates</button>
     <pre id="templates"></pre>
   </section>
-
-  <section class="card full">
-    <h2>✍️ AI Draft Email</h2>
-    <label>What should the email say?</label>
-    <textarea id="instruction" placeholder="e.g. Draft a friendly re-engagement email in German for dormant courier customers, mention a 10% discount on their next transport."></textarea>
-    <label>Optional context</label>
-    <textarea id="context" placeholder="Brand voice, recipient info, links..."></textarea>
-    <button onclick="draft()">Generate draft</button>
-    <div id="draftOut"></div>
-  </section>
-
-  <section class="card full">
-    <h2>🚀 Send Email</h2>
-    <div class="row">
-      <div><label>From</label><input id="from" placeholder="noreply@yourdomain.com" /></div>
-      <div><label>To</label><input id="to" placeholder="recipient@example.com" /></div>
-    </div>
-    <label>Subject</label><input id="subject" />
-    <label>HTML body</label><textarea id="html"></textarea>
-    <button onclick="sendMail()">Send via SendGrid</button>
-    <pre id="sendOut"></pre>
-  </section>
 </main>
 
+<script src="/holidays.js"></script>
 <script>
 const $ = id => document.getElementById(id);
-const keys = () => ({
-  'x-sendgrid-key': localStorage.getItem('sgKey') || '',
-  'x-anthropic-key': localStorage.getItem('anthKey') || '',
-});
 
-function loadKeys() {
-  $('sgKey').value = localStorage.getItem('sgKey') || '';
-  $('anthKey').value = localStorage.getItem('anthKey') || '';
+async function api(path, opts = {}) {
+  const r = await fetch(path, opts);
+  const data = await r.json().catch(() => ({}));
+  return { ok: r.ok, data };
 }
-loadKeys();
 
-async function saveKeys() {
-  localStorage.setItem('sgKey', $('sgKey').value.trim());
-  localStorage.setItem('anthKey', $('anthKey').value.trim());
-  const r = await fetch('/api/profile', { headers: keys() });
-  const data = await r.json();
+async function testConnection() {
+  const { ok, data } = await api('/api/profile');
   $('profile').textContent = JSON.stringify(data, null, 2);
-  $('status').textContent = r.ok ? '✅ connected as ' + (data.username || data.email || 'user') : '❌ error';
-  $('status').className = r.ok ? 'ok' : 'err';
+  $('status').textContent = ok ? '✅ connected as ' + (data.username || data.email || 'user') : '❌ ' + (data.error || 'error');
+  $('status').className = ok ? 'ok' : 'err';
 }
 
 async function loadStats() {
-  const r = await fetch('/api/stats?days=7', { headers: keys() });
-  $('stats').textContent = JSON.stringify(await r.json(), null, 2);
-}
-
-async function analyzeStats() {
-  $('stats').textContent = 'Analyzing...';
-  const r = await fetch('/api/ai/analyze', { method:'POST', headers: { 'Content-Type':'application/json', ...keys() }, body:'{}' });
-  const data = await r.json();
-  $('stats').textContent = data.analysis || data.error;
+  const { data } = await api('/api/stats?days=7');
+  $('stats').textContent = JSON.stringify(data, null, 2);
 }
 
 async function loadTemplates() {
-  const r = await fetch('/api/templates', { headers: keys() });
-  $('templates').textContent = JSON.stringify(await r.json(), null, 2);
+  const { data } = await api('/api/templates');
+  $('templates').textContent = JSON.stringify(data, null, 2);
 }
 
-async function draft() {
-  $('draftOut').innerHTML = 'Generating...';
-  const r = await fetch('/api/ai/draft', {
-    method:'POST',
-    headers: { 'Content-Type':'application/json', ...keys() },
-    body: JSON.stringify({ instruction: $('instruction').value, context: $('context').value }),
-  });
-  const d = await r.json();
-  if (d.error) { $('draftOut').innerHTML = '<p class="err">'+d.error+'</p>'; return; }
-  $('subject').value = d.subject || '';
-  $('html').value = d.html || d.text || '';
-  $('draftOut').innerHTML = '<p class="ok">Draft loaded into the Send Email form below ↓</p>';
+// ---------- Calendar ----------
+let calCursor = new Date();
+calCursor.setDate(1);
+let calData = {};         // 'YYYY-MM-DD' -> [messages]
+let calScheduled = {};    // 'YYYY-MM-DD' -> [scheduled items]
+let calSelected = null;
+
+function monthLabel(d) {
+  return d.toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
 }
 
-async function sendMail() {
-  const body = {
-    from: $('from').value, to: $('to').value,
-    subject: $('subject').value, html: $('html').value,
-  };
-  const r = await fetch('/api/send', {
-    method:'POST',
-    headers: { 'Content-Type':'application/json', ...keys() },
-    body: JSON.stringify(body),
-  });
-  const d = await r.json();
-  $('sendOut').textContent = r.ok ? '✅ sent' : '❌ ' + (d.error || 'error');
+function calShift(delta) {
+  calCursor.setMonth(calCursor.getMonth() + delta);
+  renderCalendar();
+  loadCalendar();
 }
+
+async function loadCalendar() {
+  // Past messages for the visible month + buffer
+  const now = new Date();
+  const diffDays = Math.ceil((now - calCursor) / 86400000) + 45;
+  const days = Math.max(7, Math.min(diffDays, 400));
+
+  const [msgRes, schedRes] = await Promise.all([
+    api('/api/messages?days=' + days + '&limit=1000'),
+    api('/api/scheduled'),
+  ]);
+
+  calData = {};
+  if (msgRes.ok) {
+    const msgs = msgRes.data.messages || [];
+    for (const m of msgs) {
+      const t = m.last_event_time || m.last_event_timestamp;
+      if (!t) continue;
+      const day = new Date(t).toISOString().slice(0, 10);
+      (calData[day] = calData[day] || []).push(m);
+    }
+  } else {
+    $('calendar').innerHTML = '<p class="err">' + (msgRes.data.error || 'error loading messages') + '</p>';
+  }
+
+  calScheduled = {};
+  if (schedRes.ok) {
+    const items = Array.isArray(schedRes.data) ? schedRes.data : (schedRes.data.scheduled || []);
+    for (const s of items) {
+      if (!s.send_at) continue;
+      const day = new Date(s.send_at * 1000).toISOString().slice(0, 10);
+      (calScheduled[day] = calScheduled[day] || []).push(s);
+    }
+  }
+
+  renderCalendar();
+}
+
+function renderCalendar() {
+  $('calLabel').textContent = monthLabel(calCursor);
+  const year = calCursor.getFullYear();
+  const month = calCursor.getMonth();
+  const first = new Date(year, month, 1);
+  const last = new Date(year, month + 1, 0);
+  const startOffset = (first.getDay() + 6) % 7;
+  const rows = Math.ceil((startOffset + last.getDate()) / 7) * 7;
+  const todayKey = new Date().toISOString().slice(0, 10);
+
+  const heads = ['Pn','Wt','Śr','Cz','Pt','Sb','Nd'].map(h => `<div class="cal-head">${h}</div>`).join('');
+  let cells = '';
+  for (let i = 0; i < rows; i++) {
+    const dayNum = i - startOffset + 1;
+    if (dayNum < 1 || dayNum > last.getDate()) {
+      cells += '<div class="cal-day empty"></div>';
+      continue;
+    }
+    const key = `${year}-${String(month+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+    const count = (calData[key] || []).length;
+    const schedCount = (calScheduled[key] || []).length;
+    const hols = holidaysOn(key);
+    const cls = ['cal-day'];
+    if (count) cls.push('has');
+    if (key === todayKey) cls.push('today');
+    if (calSelected === key) cls.push('sel');
+    if (hols.length) cls.push('holiday');
+    const schedBadge = schedCount ? `<div class="sc">⏰ ${schedCount}</div>` : '';
+    const holBadge = hols.length
+      ? `<div class="hol">${hols.map(h => `<span title="${esc(h.cc)}: ${esc(h.name)}">${COUNTRY_FLAGS[h.cc] || h.cc}</span>`).join('')}</div>`
+      : '';
+    cells += `<div class="${cls.join(' ')}" onclick="selectDay('${key}')">${schedBadge}<div class="d">${dayNum}</div>${holBadge}<div class="c">${count || ''}</div></div>`;
+  }
+  $('calendar').innerHTML = `<div class="cal-grid">${heads}${cells}</div>`;
+  if (calSelected) renderDayList(calSelected);
+}
+
+function statusBadge(s) {
+  const cls = (s || '?').toLowerCase().replace(/\s+/g, '_');
+  return `<span class="badge b-${cls}">${s || '?'}</span>`;
+}
+
+function esc(s) { return String(s || '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
+
+function renderDayList(day) {
+  const sent = calData[day] || [];
+  const sched = calScheduled[day] || [];
+  const hols = holidaysOn(day);
+
+  let html = `<h3 style="font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">${day}</h3>`;
+
+  if (hols.length) {
+    html += `<div style="margin:6px 0 10px; padding:10px; background:#2a1d0a; border:1px solid #5a4020; border-radius:8px;">`;
+    html += `<strong style="font-size:12px; color:#ffb86b;">🎉 Święta narodowe</strong><ul style="margin:6px 0 0; padding-left:18px; font-size:12px;">`;
+    html += hols.map(h => `<li>${COUNTRY_FLAGS[h.cc] || ''} <strong>${h.cc}</strong> — ${esc(h.name)}</li>`).join('');
+    html += `</ul></div>`;
+  }
+
+  if (!sent.length && !sched.length && !hols.length) {
+    $('dayList').innerHTML = `<p><small>Brak wiadomości ani świąt w dniu ${day}</small></p>`;
+    return;
+  }
+
+  if (sent.length) {
+    html += `<h4 style="margin:10px 0 4px; font-size:12px;">Wysłane (${sent.length})</h4>`;
+    html += `<div class="msg-row head"><div>Godzina</div><div>Od → Do</div><div>Temat</div><div>Status</div></div>`;
+    html += sent.map(m => {
+      const t = m.last_event_time ? new Date(m.last_event_time).toLocaleTimeString('pl-PL') : '';
+      return `<div class="msg-row">
+        <div>${t}</div>
+        <div>${esc(m.from_email)} → ${esc(m.to_email)}</div>
+        <div>${esc(m.subject)}</div>
+        <div>${statusBadge(m.status)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  if (sched.length) {
+    html += `<h4 style="margin:14px 0 4px; font-size:12px;">Zaplanowane (${sched.length})</h4>`;
+    html += `<div class="msg-row head"><div>Godzina</div><div colspan="2">Batch ID</div><div>Status</div></div>`;
+    html += sched.map(s => {
+      const t = s.send_at ? new Date(s.send_at * 1000).toLocaleTimeString('pl-PL') : '';
+      return `<div class="msg-row">
+        <div>${t}</div>
+        <div style="grid-column: span 2;"><code>${esc(s.batch_id)}</code></div>
+        <div>${statusBadge(s.status)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  $('dayList').innerHTML = html;
+}
+
+function selectDay(key) {
+  calSelected = key;
+  renderCalendar();
+}
+
+// ---------- Scheduled list ----------
+async function loadScheduled() {
+  const { ok, data } = await api('/api/scheduled');
+  if (!ok) { $('scheduled').innerHTML = '<p class="err">' + (data.error || 'error') + '</p>'; return; }
+  const items = Array.isArray(data) ? data : (data.scheduled || []);
+  if (!items.length) { $('scheduled').innerHTML = '<p><small>Brak zaplanowanych wysyłek.</small></p>'; return; }
+  let html = `<div class="sched-row head"><div>Batch ID</div><div>Send at</div><div>Status</div></div>`;
+  html += items.map(s => {
+    const when = s.send_at ? new Date(s.send_at * 1000).toLocaleString('pl-PL') : '—';
+    return `<div class="sched-row"><div><code>${esc(s.batch_id)}</code></div><div>${when}</div><div>${statusBadge(s.status)}</div></div>`;
+  }).join('');
+  $('scheduled').innerHTML = html;
+}
+
+// init
+testConnection();
+renderCalendar();
+loadCalendar();
 </script>
 </body>
 </html>
